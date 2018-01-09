@@ -1,6 +1,8 @@
 # ScreenShotView
 Android实现屏幕截图的空间，可以对图片进行涂鸦、画圈，可将修改图片保存到本地
 
+对涂鸦可以进行撤销操作
+
 1. 项目添加依赖：
 
     project/build.gradle中添加：
