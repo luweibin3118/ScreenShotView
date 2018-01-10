@@ -1,5 +1,6 @@
 package com.lwb.screenshot;
 
+import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -11,6 +12,7 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.os.Build;
 import android.os.Environment;
+import android.support.annotation.NonNull;
 import android.util.AttributeSet;
 import android.view.GestureDetector;
 import android.view.Gravity;
@@ -27,6 +29,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -88,6 +91,11 @@ public class ScreenShotView extends View {
     private RectF drawCircleRectF;
 
     private boolean onDoodleDrawing = false;
+
+    private boolean scaleShot = true;
+
+    private int toolBarBackgroundColor = 0xffaaaaaa, toolBarTextSize = 14,
+            toolBarTextColor = 0xff1874CD, selectViewBackgroundColor = 0xffCCCCCC;
 
     private GestureDetector.OnGestureListener shotGestureListener = new GestureDetector.OnGestureListener() {
         @Override
@@ -294,8 +302,10 @@ public class ScreenShotView extends View {
         }
     };
 
-    public ScreenShotView(Context context) {
+    public ScreenShotView(Activity context) {
         super(context);
+        ViewGroup content = (ViewGroup) context.findViewById(android.R.id.content);
+        content.addView(this, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         init();
     }
 
@@ -322,7 +332,7 @@ public class ScreenShotView extends View {
 
         editGestureDetector = new GestureDetector(getContext(), editGestureListener);
         editGestureDetector.setIsLongpressEnabled(false);
-        colors = new int[15];
+        colors = new int[20];
         for (int i = 0; i < colors.length; i++) {
             colors[i] = 0xffff0000 - 0x00125932 * i;
         }
@@ -361,17 +371,11 @@ public class ScreenShotView extends View {
         if (currentStatus == STATUS_SHOT) {
             drawShotRect(canvas);
             drawShotLine(canvas);
+            drawTipText(canvas);
         } else if (currentStatus == STATUS_DOODLE || currentStatus == STATUS_DRAW_CIRCLE) {
             drawEditRect(canvas);
             drawDoodle(canvas);
         }
-
-        mPaint.reset();
-        mPaint.setTextSize(50);
-        mPaint.setColor(0xff888888);
-        mPaint.setTextAlign(Paint.Align.CENTER);
-        canvas.drawText("双击截屏", width / 2, (float) (height * 0.95), mPaint);
-
     }
 
     private void drawDoodle(Canvas canvas) {
@@ -487,6 +491,15 @@ public class ScreenShotView extends View {
         canvas.drawPath(mPath, mPaint);
     }
 
+
+    private void drawTipText(Canvas canvas) {
+        mPaint.reset();
+        mPaint.setTextSize(50);
+        mPaint.setColor(0xff888888);
+        mPaint.setTextAlign(Paint.Align.CENTER);
+        canvas.drawText("双击截屏", width / 2, (float) (height * 0.95), mPaint);
+    }
+
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (currentStatus == STATUS_DOODLE || currentStatus == STATUS_DRAW_CIRCLE) {
@@ -552,9 +565,42 @@ public class ScreenShotView extends View {
                     int bw = shotBitmap.getWidth();
                     int bh = shotBitmap.getHeight();
                     srcRect.set(0, 0, bw, bh);
-                    dstRect.set((width - bw) / 2, 0, (width - bw) / 2 + bw, bh);
-                    dstRect.top = (height - toolBarHeight - bh) / 2;
-                    dstRect.bottom = dstRect.top + bh;
+
+                    int dstL = (width - bw) / 2;
+                    int dstT = 0;
+                    int dstR = (width - bw) / 2 + bw;
+                    int dstB = bh;
+
+                    if (scaleShot) {
+                        float dstAlpha = (float) bw / (float) bh;
+                        float srcAlpha = (float) width / (float) (height - toolBarHeight);
+                        if (dstAlpha > srcAlpha) {
+                            float sc = ((float) (width)) / ((float) (dstR - dstL));
+                            int th = (int) ((dstB - dstT) * sc);
+                            dstL = 0;
+                            dstT = (height - toolBarHeight - th) / 2;
+                            dstR = width;
+                            dstB = height - toolBarHeight - dstT;
+                        } else {
+                            float sc = ((float) (height - toolBarHeight)) / ((float) (dstB - dstT));
+                            int tw = (int) ((dstR - dstL) * sc);
+                            dstL = (width - tw) / 2;
+                            dstR = width - dstL;
+                            dstT = 0;
+                            dstB = height - toolBarHeight;
+                        }
+                        dstRect.set(dstL, dstT, dstR, dstB);
+                    } else {
+                        dstRect.set(dstL, dstT, dstR, dstB);
+                        dstRect.top = (height - toolBarHeight - bh) / 2;
+                        if (dstRect.top < 0) {
+                            dstRect.top = 0;
+                        }
+                        dstRect.bottom = dstRect.top + bh;
+                        if (dstRect.bottom > height - toolBarHeight) {
+                            dstRect.bottom = height - toolBarHeight;
+                        }
+                    }
                     currentStatus = STATUS_DOODLE;
                     showToolBar();
                     invalidate();
@@ -568,7 +614,7 @@ public class ScreenShotView extends View {
             toolPop = new PopupWindow();
             LinearLayout linearLayout = new LinearLayout(getContext());
             linearLayout.setOrientation(LinearLayout.HORIZONTAL);
-            linearLayout.setBackgroundColor(0xffaaaaaa);
+            linearLayout.setBackgroundColor(toolBarBackgroundColor);
 
             LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
             layoutParams.weight = 1;
@@ -576,6 +622,8 @@ public class ScreenShotView extends View {
 
             TextView reSelect = new TextView(getContext());
             reSelect.setText("重选");
+            reSelect.setTextSize(toolBarTextSize);
+            reSelect.setTextColor(toolBarTextColor);
             reSelect.setGravity(Gravity.CENTER);
             linearLayout.addView(reSelect, layoutParams);
             reSelect.setOnClickListener(new OnClickListener() {
@@ -595,6 +643,8 @@ public class ScreenShotView extends View {
 
             TextView reset = new TextView(getContext());
             reset.setText("撤销");
+            reset.setTextSize(toolBarTextSize);
+            reset.setTextColor(toolBarTextColor);
             reset.setGravity(Gravity.CENTER);
             linearLayout.addView(reset, layoutParams);
             reset.setOnClickListener(new OnClickListener() {
@@ -609,6 +659,8 @@ public class ScreenShotView extends View {
 
             doodle = new SelectDoodleTextView(getContext(), STATUS_DOODLE);
             doodle.setText("涂鸦");
+            doodle.setTextSize(toolBarTextSize);
+            doodle.setTextColor(toolBarTextColor);
             doodle.setGravity(Gravity.CENTER);
             doodle.setShowHeader(true);
             linearLayout.addView(doodle, layoutParams);
@@ -624,6 +676,8 @@ public class ScreenShotView extends View {
 
             drawCircle = new SelectDoodleTextView(getContext(), STATUS_DRAW_CIRCLE);
             drawCircle.setText("画圈");
+            drawCircle.setTextSize(toolBarTextSize);
+            drawCircle.setTextColor(toolBarTextColor);
             drawCircle.setGravity(Gravity.CENTER);
             drawCircle.setShowHeader(false);
             linearLayout.addView(drawCircle, layoutParams);
@@ -642,6 +696,8 @@ public class ScreenShotView extends View {
 
             TextView save = new TextView(getContext());
             save.setText("保存");
+            save.setTextSize(toolBarTextSize);
+            save.setTextColor(toolBarTextColor);
             save.setGravity(Gravity.CENTER);
             linearLayout.addView(save, layoutParams);
             save.setOnClickListener(new OnClickListener() {
@@ -694,6 +750,69 @@ public class ScreenShotView extends View {
         }
     }
 
+    @Override
+    protected void onVisibilityChanged(@NonNull View changedView, int visibility) {
+        super.onVisibilityChanged(changedView, visibility);
+        if (visibility != VISIBLE) {
+            if (toolPop != null) {
+                toolPop.dismiss();
+            }
+            if (selectDoodlePop != null) {
+                selectDoodlePop.dismiss();
+            }
+            if (doodlePathList != null) {
+                doodlePathList.clear();
+            }
+        } else {
+            currentStatus = STATUS_SHOT;
+        }
+    }
+
+    /**
+     * 设置可以选择的颜色值数组， eg：0xffff0000;
+     *
+     * @param colors
+     */
+    public void setColors(int[] colors) {
+        this.colors = colors;
+    }
+
+    /**
+     * 设置工具栏背景
+     *
+     * @param toolBarBackgroundColor
+     */
+    public void setToolBarBackgroundColor(int toolBarBackgroundColor) {
+        this.toolBarBackgroundColor = toolBarBackgroundColor;
+    }
+
+    /**
+     * 设置工具栏字体大小
+     *
+     * @param toolBarTextSize
+     */
+    public void setToolBarTextSize(int toolBarTextSize) {
+        this.toolBarTextSize = toolBarTextSize;
+    }
+
+    /**
+     * 设置工具栏字体颜色
+     *
+     * @param toolBarTextColor
+     */
+    public void setToolBarTextColor(int toolBarTextColor) {
+        this.toolBarTextColor = toolBarTextColor;
+    }
+
+    /**
+     * 设置是否将截图放大
+     *
+     * @param scaleShot
+     */
+    public void setScaleShot(boolean scaleShot) {
+        this.scaleShot = scaleShot;
+    }
+
     private Bitmap snapShot(View tagView, int x, int y, int width, int height) {
         View view = tagView;
         view.setDrawingCacheEnabled(true);
@@ -705,7 +824,8 @@ public class ScreenShotView extends View {
     }
 
     private void saveShot() throws IOException {
-        String bitName = "Screenshot_" + System.currentTimeMillis() + ".png";
+        SimpleDateFormat format = new SimpleDateFormat("yyyyMMdd-HHmmss");
+        String bitName = "Screenshot_" + format.format(System.currentTimeMillis()) + ".jpg";
         Bitmap bitmap = snapShot(this, dstRect.left, dstRect.top,
                 dstRect.right - dstRect.left, dstRect.bottom - dstRect.top);
         if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
@@ -721,17 +841,20 @@ public class ScreenShotView extends View {
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
             } catch (FileNotFoundException e) {
                 e.printStackTrace();
-                Toast.makeText(this.getContext(), "保存失败!", Toast.LENGTH_SHORT).show();
-            }
-            try {
-                if (out != null) {
-                    out.flush();
-                    out.close();
+                Toast.makeText(this.getContext(), "保存失败，请确认应用是否已开启存储权限！", Toast.LENGTH_LONG).show();
+                return;
+            } finally {
+                try {
+                    if (out != null) {
+                        out.flush();
+                        out.close();
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
             }
-            Toast.makeText(this.getContext(), "已保存至" + Environment.getExternalStorageDirectory()
+
+            Toast.makeText(this.getContext(), "已保存至：" + Environment.getExternalStorageDirectory()
                     + "/Pictures/Screenshots/" + bitName, Toast.LENGTH_SHORT).show();
         }
     }
@@ -846,7 +969,7 @@ public class ScreenShotView extends View {
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
             paint.reset();
-            paint.setColor(0xffbbbbbb);
+            paint.setColor(selectViewBackgroundColor);
             canvas.drawRect(0, 0, width, height, paint);
 
             int col = -1;
@@ -942,9 +1065,9 @@ public class ScreenShotView extends View {
 
     private class DrawItem {
         int itemType;
-        Path path;
         int color;
         int size;
+        Path path;
         RectF circleRectF;
     }
 }

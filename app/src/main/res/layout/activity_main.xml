@@ -11,8 +11,10 @@
         android:scaleType="fitXY"
         android:src="@drawable/test" />
 
-    <com.lwb.screenshot.ScreenShotView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
-
+    <Button
+        android:id="@+id/test_screenshot"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center|top"
+        android:text="截图" />
 </FrameLayout>
